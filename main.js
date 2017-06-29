@@ -1,4 +1,5 @@
 const notifier = require('node-notifier');
+const emoji = require('node-emoji');
 const path = require('path');
 
 const ui = require('./userInterface.js');
@@ -56,6 +57,7 @@ function formatMessageMentions(text) {
   }
 
   let formattedText = text;
+
   // find user mentions
   const userMentions = text.match(/<@U[a-zA-Z0-9]+>/g);
   if (userMentions !== null) {
@@ -75,11 +77,14 @@ function formatMessageMentions(text) {
 
         formattedText = text.replace(
           new RegExp(`<@${userId}>`, 'g'),
-          `{${modifier}}@${username}{/${modifier}}`);
+          `{${modifier}}@${username}{/${modifier}}`);  
       });
   }
 
   // find special words
+
+  formattedText = emoji.emojify(formattedText);
+
   return formattedText.replace(
     /<!channel>/g,
     '{yellow-fg}@channel{/yellow-fg}');
@@ -92,13 +97,6 @@ function handleNewMessage(message) {
   } else {
     const author = users.find(user => message.user === user.id);
     username = (author && author.name) || UNKNOWN_USER_NAME;
-
-    notifier.notify({
-      icon: path.join(__dirname, 'Slack_Mark_Black_Web.png'),
-      message: `${username}: ${message.text}`,
-      sound: true,
-      title: 'Terminal Slack',
-    });
   }
 
   if (message.channel !== currentChannelId ||
@@ -110,6 +108,45 @@ function handleNewMessage(message) {
     `{bold}${username}{/bold}: ${formatMessageMentions(message.text)}`
   );
   components.chatWindow.scroll(SCROLL_PER_MESSAGE);
+  components.screen.render();
+}
+
+function notify(message) {
+
+  let channel = channels.find(channel => channel.id === message.channel);
+
+  if(channel != undefined) {
+    let itemToFormat = components.channelList.getItem(channel.name);
+
+    if(itemToFormat != undefined) {
+      itemToFormat.style['fg'] = 'red';
+    }
+
+    notifier.notify({
+      icon: path.join(__dirname, 'Slack_Mark_Black_Web.png'),
+      message: `${channel.name}: ${message.text}`, 
+      sound: true,                
+      title: 'Terminal Slack',
+    });
+  }
+
+  channel = users.find(user => user.id === message.channel);
+
+  if(channel != undefined) {
+    let itemToFormat = components.userList.getItem(channel.name);
+
+    if(itemToFormat != undefined) {
+      itemToFormat.style['fg'] = 'red';
+    }
+
+    notifier.notify({
+      icon: path.join(__dirname, 'Slack_Mark_Black_Web.png'),
+      message: `${channel.name}: ${message.text}`, 
+      sound: true,                
+      title: 'Terminal Slack',
+    });
+  }
+
   components.screen.render();
 }
 
@@ -130,7 +167,18 @@ slack.init((data, ws) => {
       handleSentConfirmation(parsedMessage);
     } else if (parsedMessage.type === 'message') {
       handleNewMessage(parsedMessage);
+      notify(parsedMessage);
     }
+  });
+
+  ws.on('message.channels', (message) => {
+    const parsedMessage = JSON.parse(message);
+    notify(parsedMessage);
+  });
+
+  ws.on('message.im', (message) => {
+    const parsedMessage = JSON.parse(message);
+    notify(parsedMessage);
   });
 
   // initialize these event handlers here as they allow functionality
@@ -188,11 +236,12 @@ slack.getChannels((error, response, data) => {
   }
 
   const channelData = JSON.parse(data);
-  channels = channelData.channels.filter(channel => !channel.is_archived);
+  channels = channelData.channels.filter(channel => !channel.is_archived).filter(channel => channel.is_member);
 
   components.channelList.setItems(
     channels.map(slackChannel => slackChannel.name)
   );
+
   components.screen.render();
 });
 
@@ -247,6 +296,12 @@ function updateMessages(data, markFn) {
 components.userList.on('select', (data) => {
   const username = data.content;
 
+  let itemToFormat = components.userList.getItem(username);
+
+  if(itemToFormat != undefined) {
+    itemToFormat.style['fg'] = 'white';
+  }
+
   // a channel was selected
   components.mainWindowTitle.setContent(`{bold}${username}{/bold}`);
   components.chatWindow.setContent('Getting messages...');
@@ -268,6 +323,12 @@ components.userList.on('select', (data) => {
 
 components.channelList.on('select', (data) => {
   const channelName = data.content;
+
+  let itemToFormat = components.channelList.getItem(channelName);
+
+  if(itemToFormat != undefined) {
+    itemToFormat.style['fg'] = 'white';
+  }
 
   // a channel was selected
   components.mainWindowTitle.setContent(`{bold}${channelName}{/bold}`);

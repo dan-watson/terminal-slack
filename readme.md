@@ -3,6 +3,10 @@ Terminal Slack
 
 A terminal interface for Slack.
 
+##Emoji
+
+npm install --save node-emoji
+
 ##Controls
  - Ctrl-c - select channels list
     - Use the arrow keys (or j/k) and enter to select a channel
